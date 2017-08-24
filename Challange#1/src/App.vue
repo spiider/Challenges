@@ -6,38 +6,32 @@
 </template>
 
 <script>
-const SNAKE_SPEED = 10;
 export default {
   name: 'app',
   data() {
     return {
       canvas: null,
       ctx: null,
-      scale: 20,
+      gameLoop: null,
+      scale: 10,
+      score: 0,
+      direction: 'right',
       snake: {
-        positionX: 0,
-        positionY: 0,
-        color: 'green',
-        velocityX: 1,
-        velocityY: 0,
-        total: 0,
+        initialSize: 5,
         tail: [],
       },
-      food: {
-        color: 'red',
-        positionX: null,
-        positionY: null,
-      },
-      width: 500,
-      height: 500,
+      food: null,
+      width: 0,
+      height: 0,
     };
   },
   mounted: function mountedApp() {
     window.addEventListener('keydown', this.handleKeydown);
     this.canvas = document.getElementById('canvas');
     this.ctx = this.canvas.getContext('2d');
-    this.respawnFood();
-    setInterval(this.renderSnake, 1000 / SNAKE_SPEED);
+    this.width = this.canvas.width;
+    this.height = this.canvas.height;
+    this.init();
   },
   computed: {
 
@@ -47,76 +41,100 @@ export default {
       switch (evt.keyCode) {
         case 38: // up arrow
         case 87: // W
-          this.moveSnake(0, -1);
+          if (this.direction !== 'down') this.direction = 'up';
           break;
         case 39: // right arrow
         case 68: // D
-          this.moveSnake(1, 0);
+          if (this.direction !== 'left') this.direction = 'right';
           break;
         case 40: // down arrow
         case 83: // S
-          this.moveSnake(0, 1);
+          if (this.direction !== 'up') this.direction = 'down';
           break;
         case 37: // left arrow
         case 65: // A
-          this.moveSnake(-1, 0);
+          if (this.direction !== 'right') this.direction = 'left';
+          break;
+        default:
+      }
+    },
+    spawnFood() {
+      this.food = {
+        x: Math.round((Math.random() * (this.width - this.scale)) / this.scale),
+        y: Math.round((Math.random() * (this.height - this.score)) / this.scale),
+      };
+    },
+    spawnSnake() {
+      this.snake.tail = []; // reset snake tail
+      for (let i = this.snake.initialSize - 1; i >= 0; i -= 1) {
+        this.snake.tail.push({ x: i, y: 0 });
+      }
+    },
+    drawSqr(x, y, type = 0) {
+      this.ctx.fillStyle = (type === 0) ? 'blue' : 'red';
+      this.ctx.fillRect(x * this.scale, y * this.scale, this.scale, this.scale);
+      this.ctx.strokeStyle = 'white';
+      this.ctx.strokeRect(x * this.scale, y * this.scale, this.scale, this.scale);
+    },
+    init() {
+      this.direction = 'right'; // set start direction
+      this.spawnSnake();
+      this.spawnFood();
+      this.score = 0; // reset score
+      if (typeof this.gameLoop !== 'undefined') clearInterval(this.gameLoop);
+      this.gameLoop = setInterval(this.renderGame, 60);
+    },
+    isCollision(x, y, array) {
+      for (let i = 0; i < array.length; i += 1) {
+        if (array[i].x === x && array[i].y === y) return true;
+      }
+      return false;
+    },
+    renderGame() {
+      this.ctx.fillStyle = 'white';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+      this.ctx.strokeStyle = 'black';
+      this.ctx.strokeRect(0, 0, this.width, this.height);
+      let nx = this.snake.tail[0].x;
+      let ny = this.snake.tail[0].y;
+      switch (this.direction) {
+        case 'right':
+          nx += 1;
+          break;
+        case 'left':
+          nx -= 1;
+          break;
+        case 'up':
+          ny -= 1;
+          break;
+        case 'down':
+          ny += 1;
           break;
         default:
           break;
       }
-    },
-    moveSnake(x, y) {
-      this.snake.velocityX = x;
-      this.snake.velocityY = y;
-    },
-    updateSnake() {
-      for (let i = 0; i < this.snake.total - 1; i += 1) {
-        this.snake.tail[i] = this.snake.tail[i + i];
+      if (nx === -1 || nx === this.width / this.scale || ny === -1 ||
+        ny === this.height / this.scale || this.isCollision(nx, ny, this.snake.tail)) {
+        this.init();
+        return;
       }
-      this.snake.tail[this.snake.total - 1] = [this.snake.positionX, this.snake.positionY];
-      this.snake.positionX += this.snake.velocityX * this.scale;
-      this.snake.positionY += this.snake.velocityY * this.scale;
-      if (this.snake.positionX > this.width - this.scale || this.snake.positionX < 0) {
-        this.snake.positionX = (this.snake.positionX > 0) ? 0 : this.width - this.scale;
+      let tail;
+      if (nx === this.food.x && ny === this.food.y) {
+        tail = { x: nx, y: ny };
+        this.score += 1;
+        this.spawnFood();
+      } else {
+        tail = this.snake.tail.pop();
+        tail.x = nx;
+        tail.y = ny;
       }
-      if (this.snake.positionY > this.height - this.scale || this.snake.positionY < 0) {
-        this.snake.positionY = (this.snake.positionY > 0) ? 0 : this.height - this.scale;
+      this.snake.tail.unshift(tail);
+      for (let i = 0; i < this.snake.tail.length; i += 1) {
+        const c = this.snake.tail[i];
+        this.drawSqr(c.x, c.y);
       }
-    },
-    drawFood() {
-      this.ctx.beginPath();
-      this.ctx.fillStyle = this.food.color;
-      this.ctx.rect(this.food.positionX, this.food.positionY, this.scale / 1.5,
-         this.scale / 1.5);
-      this.ctx.fill();
-    },
-    respawnFood() {
-      const cols = Math.floor(this.width - this.scale);
-      const rows = Math.floor(this.height - this.scale);
-      this.food.positionX = Math.floor(Math.random() * cols);
-      this.food.positionY = Math.floor(Math.random() * rows);
-    },
-    eatFood() {
-      const a = this.snake.positionX - this.food.positionX;
-      const b = this.snake.positionY - this.food.positionY;
-      const c = Math.sqrt((a * a) + (b * b));
-      if (c < 15) {
-        this.snake.total += 1;
-        this.respawnFood();
-      }
-    },
-    renderSnake() {
-      this.ctx.clearRect(0, 0, 500, 500); // clear trail
-      this.drawFood();
-      this.updateSnake();
-      this.eatFood();
-      this.ctx.beginPath();
-      this.ctx.fillStyle = this.snake.color;
-      for (let i = 0; i < this.snake.total; i += 1) {
-        this.ctx.rect(this.snake.tail[i][0], this.snake.tail[i][1], this.scale, this.scale);
-      }
-      this.ctx.rect(this.snake.positionX, this.snake.positionY, this.scale, this.scale);
-      this.ctx.fill();
+      this.drawSqr(this.food.x, this.food.y, 1);
+      this.ctx.fillText(`Score: ${this.score}`, 5, this.height - 5);
     },
   },
 };
@@ -133,6 +151,7 @@ export default {
   }
 
   canvas {
-    background: darkgrey;
+    background: white;
+    border: 1px solid #000;
   }
 </style>
